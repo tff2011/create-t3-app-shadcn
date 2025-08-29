@@ -15,7 +15,7 @@ export const postRouter = createTRPCRouter({
       };
     }),
 
-  create: protectedProcedure
+  create: publicProcedure
     .input(z.object({ name: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       // simulate a slow db call
@@ -24,19 +24,18 @@ export const postRouter = createTRPCRouter({
       return ctx.db.post.create({
         data: {
           name: input.name,
-          createdBy: { connect: { id: ctx.session.user.id } },
+          createdById: "demo-user", // Hardcoded for demo
         },
       });
     }),
 
-  getLatest: protectedProcedure.query(({ ctx }) => {
+  getLatest: publicProcedure.query(({ ctx }) => {
     return ctx.db.post.findFirst({
       orderBy: { createdAt: "desc" },
-      where: { createdBy: { id: ctx.session.user.id } },
     });
   }),
 
-  getSecretMessage: protectedProcedure.query(() => {
+  getSecretMessage: publicProcedure.query(() => {
     return "you can now see this secret message!";
   }),
 });

@@ -5,6 +5,7 @@ import { loggerLink, unstable_httpBatchStreamLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import { useState } from "react";
 import SuperJSON from "superjson";
+import { useSession } from "next-auth/react";
 
 import { type AppRouter } from "@/server/api/root";
 
@@ -22,8 +23,9 @@ const getQueryClient = () => {
 
 export const api = createTRPCReact<AppRouter>();
 
-export function TRPCReactProvider(props: { children: React.ReactNode }) {
+function TRPCReactProviderInner(props: { children: React.ReactNode }) {
   const queryClient = getQueryClient();
+  const { data: session } = useSession();
 
   const [trpcClient] = useState(() =>
     api.createClient({
@@ -53,6 +55,10 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
       </api.Provider>
     </QueryClientProvider>
   );
+}
+
+export function TRPCReactProvider(props: { children: React.ReactNode }) {
+  return <TRPCReactProviderInner>{props.children}</TRPCReactProviderInner>;
 }
 
 function getBaseUrl() {

@@ -6,6 +6,7 @@ import {
 } from "next-auth";
 import { type Adapter } from "next-auth/adapters";
 import DiscordProvider from "next-auth/providers/discord";
+import CredentialsProvider from "next-auth/providers/credentials";
 
 import { env } from "@/env";
 import { db } from "@/server/db";
@@ -38,20 +39,62 @@ declare module "next-auth" {
  */
 export const authOptions: NextAuthOptions = {
   callbacks: {
-    session: ({ session, user }) => ({
+    session: ({ session, token }) => ({
       ...session,
       user: {
         ...session.user,
-        id: user.id,
+        id: token.sub || session.user.id,
       },
     }),
+    jwt: ({ token, user }) => {
+      if (user) {
+        token.sub = user.id;
+      }
+      return token;
+    },
   },
-  adapter: PrismaAdapter(db) as Adapter,
+  session: {
+    strategy: "jwt",
+  },
+  // Removendo adapter temporariamente para testar
+  // adapter: PrismaAdapter(db) as Adapter,
   providers: [
-    DiscordProvider({
-      clientId: env.DISCORD_CLIENT_ID,
-      clientSecret: env.DISCORD_CLIENT_SECRET,
+    // Matrix Authentication Provider
+    CredentialsProvider({
+      name: "Matrix",
+      credentials: {
+        username: { label: "Username", type: "text" },
+        password: { label: "Password", type: "password" }
+      },
+      async authorize(credentials) {
+        if (!credentials?.username || !credentials?.password) {
+          return null;
+        }
+
+        // Verificar credenciais Matrix
+        if (credentials.username === env.NEXT_PUBLIC_LOGIN_USERNAME &&
+            credentials.password === env.NEXT_PUBLIC_LOGIN_PASSWORD) {
+
+          // Retornar usuário Matrix (simulado)
+          return {
+            id: "matrix-user-1",
+            name: "Matrix User",
+            email: "matrix@bitcoinobservatory.com",
+            image: null,
+          };
+        }
+
+        return null;
+      }
     }),
+    ...(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET
+      ? [
+          DiscordProvider({
+            clientId: env.DISCORD_CLIENT_ID,
+            clientSecret: env.DISCORD_CLIENT_SECRET,
+          }),
+        ]
+      : []),
     /**
      * ...add more providers here.
      *
@@ -69,4 +112,6 @@ export const authOptions: NextAuthOptions = {
  *
  * @see https://next-auth.js.org/configuration/nextjs
  */
-export const getServerAuthSession = () => getServerSession(authOptions);
+export const getServerAuthSession = () => {
+  return getServerSession(authOptions);
+};

@@ -54,14 +54,17 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
+  id            String             @id @default(cuid())
   name          String?
-  email         String?   @unique
+  email         String?            @unique
   emailVerified DateTime?
   image         String?
   accounts      Account[]
   sessions      Session[]
   posts         Post[]
+  strategies    BacktestStrategy[]
+  tradingAccounts TradingAccount[]
+  riskPresets    RiskPreset[]
 }
 
 model VerificationToken {
@@ -70,4 +73,131 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model BacktestStrategy {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operations  Operation[]
+  operationTypes String[]  @default([])
+  entrySignals   String[]  @default([])
+
+  @@map("BacktestStrategy")
+  @@index([userId])
+}
+
+model Operation {
+  id                    String          @id @default(cuid())
+  operationNumber       Int
+  currency              String
+  date                  DateTime
+  hour                  Int
+  minute                Int
+  dayOfWeek             String?
+  weekNumber            Int?            // Week number of the year
+  buySell               String          // Buy/Sell
+  operationType         String
+  entryPrice            Decimal         @db.Decimal(10, 5)
+  entrySignal           String?         // Entry signal (RSI, MACD, Support, etc.)
+  dailyAtrPercentPips   Decimal?        @db.Decimal(8, 2)
+  accountBalance        Decimal?        @db.Decimal(12, 2) // Saldo da conta na entrada
+  lotQuantity           Decimal?        @db.Decimal(8, 2)  // Quantidade de lotes
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  strategyId            String
+  strategy              BacktestStrategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+
+  tradingAccountId      String?
+  tradingAccount        TradingAccount? @relation(fields: [tradingAccountId], references: [id])
+
+  riskManagement        RiskManagement?
+  liquidation           Liquidation?
+
+  @@index([strategyId])
+  @@index([operationNumber])
+  @@index([tradingAccountId])
+}
+
+model RiskManagement {
+  id                       String    @id @default(cuid())
+  entryQuotation           Decimal   @db.Decimal(10, 5)
+  profitPotentialRef       String?
+  profitPotentialQuotation Decimal?  @db.Decimal(10, 5)
+  profitPotentialSize      Decimal?  @db.Decimal(8, 2)
+  stopReference            String?
+  stopQuotation            Decimal   @db.Decimal(10, 5)
+  stopSize                 Decimal   @db.Decimal(8, 2)
+  enteredOperation         Boolean   @default(false)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  operationId              String    @unique
+  operation                Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@index([operationId])
+}
+
+model Liquidation {
+  id                    String    @id @default(cuid())
+  liquidationDate       DateTime
+  liquidationHour       Int
+  liquidationMinute     Int
+  liquidationQuotation  Decimal   @db.Decimal(10, 5)
+  balanceInPips         Decimal   @db.Decimal(8, 2)
+  liquidationProportion Decimal   @db.Decimal(5, 2)
+  profitOrLoss          String    // "PROFIT", "LOSS", or "BREAK_EVEN"
+  operationRisk         Decimal   @db.Decimal(5, 2) // Risco da operação (%)
+  liquidationReason     String?   // Motivo da liquidação
+  liquidationType       String?   // Tipo de liquidação
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  operationId           String    @unique
+  operation             Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@index([operationId])
+  @@index([profitOrLoss])
+}
+
+model TradingAccount {
+  id          String   @id @default(cuid())
+  name        String   // Nome da conta (ex: "Conta Principal", "Demo", "Live")
+  balance     Decimal  @db.Decimal(12, 2) // Saldo atual da conta em USD
+  currency    String   @default("USD") // Moeda da conta
+  isActive    Boolean  @default(true) // Conta ativa/inativa
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relação com operações que usam esta conta
+  operations  Operation[]
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+model RiskPreset {
+  id                String   @id @default(cuid())
+  name              String   // Nome do preset (ex: "Conservador", "Moderado", "Agressivo")
+  riskPercentage    Decimal  @db.Decimal(5, 2) // Porcentagem de risco por operação (ex: 1.00 = 1%)
+  maxDrawdown       Decimal  @db.Decimal(5, 2) // Máximo drawdown permitido (ex: 5.00 = 5%)
+  maxOperations     Int      @default(5) // Máximo de operações simultâneas
+  description       String?  // Descrição do preset
+  isDefault         Boolean  @default(false) // Preset padrão do usuário
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isDefault])
 }
